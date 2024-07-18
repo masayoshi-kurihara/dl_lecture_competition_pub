@@ -15,9 +15,12 @@ class BasicConvClassifier(nn.Module):
         super().__init__()
 
         self.blocks = nn.Sequential(
-            ConvBlock(in_channels, hid_dim),
-            ConvBlock(hid_dim, hid_dim),
-        )
+                ConvBlock(in_channels, hid_dim),
+                ConvBlock(hid_dim, hid_dim),
+                ConvBlock(hid_dim, hid_dim),
+                ConvBlock(hid_dim, hid_dim),
+                ConvBlock(hid_dim, hid_dim),
+            )
 
         self.head = nn.Sequential(
             nn.AdaptiveAvgPool1d(1),
@@ -32,7 +35,9 @@ class BasicConvClassifier(nn.Module):
         Returns:
             X ( b, num_classes ): _description_
         """
+        print("Input shape:", X.shape)  # 追加
         X = self.blocks(X)
+        print("Shape after blocks:", X.shape)  # 追加
 
         return self.head(X)
 
@@ -46,16 +51,17 @@ class ConvBlock(nn.Module):
         p_drop: float = 0.1,
     ) -> None:
         super().__init__()
-        
+
         self.in_dim = in_dim
         self.out_dim = out_dim
 
         self.conv0 = nn.Conv1d(in_dim, out_dim, kernel_size, padding="same")
         self.conv1 = nn.Conv1d(out_dim, out_dim, kernel_size, padding="same")
-        # self.conv2 = nn.Conv1d(out_dim, out_dim, kernel_size) # , padding="same")
-        
+        self.conv2 = nn.Conv1d(out_dim, out_dim, kernel_size, padding="same")
+
         self.batchnorm0 = nn.BatchNorm1d(num_features=out_dim)
         self.batchnorm1 = nn.BatchNorm1d(num_features=out_dim)
+        self.batchnorm2 = nn.BatchNorm1d(num_features=out_dim)
 
         self.dropout = nn.Dropout(p_drop)
 
@@ -70,7 +76,13 @@ class ConvBlock(nn.Module):
         X = self.conv1(X) + X  # skip connection
         X = F.gelu(self.batchnorm1(X))
 
-        # X = self.conv2(X)
-        # X = F.glu(X, dim=-2)
+        X = self.conv2(X) + X
+        print("Shape before GLU:", X.shape)  # 追加
+
+        # サイズが奇数の場合は調整
+        if X.shape[2] % 2 != 0:
+            X = X[:, :, :-1]  # 最後の1エレメントを削除して偶数に
+
+        X = F.glu(self.batchnorm2(X))
 
         return self.dropout(X)
